@@ -87,13 +87,13 @@
 light-monitor-kyiv/
 ├── .github/
 │   └── workflows/
-│       └── check_outages.yml
+│       └── check_outages.yml   # файл конфігурації GitHub Actions
 ├── config.json                 # конфігурація груп
 ├── main.py                     # основний код
 ├── requirements.txt            # залежності
 ├── last_schedules.json         # кеш розкладів (створюється автоматично)
 ├── message_ids.json            # ID повідомлень для видалення (створюється автоматично)
-└── README.md                   # 
+└── README.md                   # цей файл
 ```
 
 Дякую спільноті https://t.me/svitlobot_api за те, що нагадала: *хочеш, аби все добре працювало і було, як потрібно саме тобі, зроби все сам* ¯\\_(ツ)_/¯
