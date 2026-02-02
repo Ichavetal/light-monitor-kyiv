@@ -1,7 +1,7 @@
 import os
 import json
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 # Конфигурация
@@ -27,7 +27,7 @@ def format_hours(hours: float) -> str:
     # Убираем .0 для целых чисел
     if hours == int(hours):
         hours = int(hours)
-        
+    
     # Для дробных всегда "години"
     if isinstance(hours, float):
         return f"{hours} години"
@@ -89,26 +89,17 @@ def build_schedule(day_data: dict) -> list[dict]:
     - "first" = света нет ПЕРВЫЕ 30 минут часа
     - "second" = света нет ВТОРЫЕ 30 минут часа
     - "maybe" = возможно отключение (считаем как свет есть)
-    - "mfirst"/"msecond" = возможно нет первые/вторые 30 мин
-    
-    Возвращает список периодов: [{start, end, is_on, hours}, ...]
     """
     # Создаём массив из 48 получасовых слотов
-    # slots[0] = 00:00-00:30, slots[1] = 00:30-01:00, ...
     slots = []
     
     for hour in range(1, 25):
         hour_key = str(hour)
         status = day_data.get(hour_key, "yes")
         
-        # Определяем состояние для первой и второй половины часа
-        # Час 1 в данных = 00:00-01:00
-        # Час 2 в данных = 01:00-02:00
-        # и т.д.
-        
         if status == "yes":
-            first_half = True   # 00:00-00:30 свет есть
-            second_half = True  # 00:30-01:00 свет есть
+            first_half = True
+            second_half = True
         elif status == "no":
             first_half = False
             second_half = False
@@ -121,8 +112,6 @@ def build_schedule(day_data: dict) -> list[dict]:
             first_half = True
             second_half = False
         elif status in ["maybe", "mfirst", "msecond"]:
-            # Возможно отключение - для упрощения считаем как свет есть
-            # Можно изменить на False если нужен пессимистичный сценарий
             first_half = True
             second_half = True
         else:
@@ -142,17 +131,13 @@ def build_schedule(day_data: dict) -> list[dict]:
     
     for i in range(1, len(slots)):
         if slots[i] != current_status:
-            # Заканчиваем текущий период
             hours = (i - start_slot) * 0.5
-            
             periods.append({
                 "start": format_slot_time(start_slot),
                 "end": format_slot_time(i),
                 "is_on": current_status,
                 "hours": hours
             })
-            
-            # Начинаем новый период
             current_status = slots[i]
             start_slot = i
     
@@ -168,16 +153,13 @@ def build_schedule(day_data: dict) -> list[dict]:
     return periods
 
 
-def format_schedule_message(schedule: list[dict], date: datetime, group: str, is_today: bool) -> str:
-    """Форматируем сообщение для одного дня и группы"""
+def format_schedule_message(schedule: list[dict], date: datetime) -> str:
+    """Форматируем сообщение для одного дня"""
     day_name = DAYS_UA[date.weekday()]
     date_str = date.strftime("%d.%m")
-    day_type = "сьогодні" if is_today else "завтра"
     
-    # Извлекаем номер группы (GPV12.1 -> 12.1)
-    group_num = group.replace("GPV", "")
-    
-    lines = [f"🗓 Графік відключень на {day_type}, {date_str} ({day_name}), група {group_num}:"]
+    lines = [f"🗓 Графік відключень на {date_str} ({day_name}):"]
+    lines.append("")  # Пустая строка после заголовка
     
     total_on = 0.0
     total_off = 0.0
@@ -185,7 +167,15 @@ def format_schedule_message(schedule: list[dict], date: datetime, group: str, is
     for period in schedule:
         emoji = "🔋" if period["is_on"] else "🪫"
         hours_text = format_hours(period["hours"])
-        lines.append(f"{emoji}{period['start']} - {period['end']} ({hours_text})")
+        
+        if period["is_on"]:
+            # Формат: (4 години Світло є)
+            status_text = f"({hours_text} Світло є)"
+        else:
+            # Формат: (Світла нема 7 годин)
+            status_text = f"(Світла нема {hours_text})"
+        
+        lines.append(f"{emoji}{period['start']} - {period['end']} {status_text}")
         
         if period["is_on"]:
             total_on += period["hours"]
@@ -210,28 +200,31 @@ def format_full_message(data: dict) -> Optional[str]:
     sorted_days = sorted(fact_data.keys(), key=lambda x: int(x))
     
     groups = ["GPV12.1", "GPV18.1"]
-    all_messages = []
+    all_group_messages = []
     
     for group in groups:
-        group_messages = []
+        group_num = group.replace("GPV", "")
+        header = f"============ група {group_num} ============"
         
-        for idx, day_ts in enumerate(sorted_days[:2]):  # только сегодня и завтра
+        day_messages = []
+        for day_ts in sorted_days[:2]:  # только два дня
             day_data = fact_data[day_ts].get(group)
             if not day_data:
                 continue
             
             # Конвертируем timestamp в дату
             date = datetime.fromtimestamp(int(day_ts))
-            is_today = (idx == 0)
-            
             schedule = build_schedule(day_data)
-            message = format_schedule_message(schedule, date, group, is_today)
-            group_messages.append(message)
+            message = format_schedule_message(schedule, date)
+            day_messages.append(message)
         
-        if group_messages:
-            all_messages.append("\n---\n".join(group_messages))
+        if day_messages:
+            # Соединяем дни разделителем
+            days_text = "\n\n-------------------------------------\n".join(day_messages)
+            all_group_messages.append(f"{header}\n{days_text}")
     
-    return "\n===\n".join(all_messages)
+    # Соединяем группы двумя пустыми строками
+    return "\n\n\n".join(all_group_messages)
 
 
 def send_telegram_message(message: str) -> bool:
@@ -248,7 +241,8 @@ def send_telegram_message(message: str) -> bool:
     if len(message) <= max_length:
         parts = [message]
     else:
-        parts = message.split("\n===\n")
+        # Разбиваем по группам
+        parts = message.split("\n\n\n")
     
     for part in parts:
         payload = {
@@ -260,11 +254,9 @@ def send_telegram_message(message: str) -> bool:
         try:
             response = requests.post(url, json=payload, timeout=30)
             response.raise_for_status()
-            print(f"Сообщение отправлено успешно")
+            print("Сообщення відправлено успішно")
         except Exception as e:
-            print(f"Ошибка отправки: {e}")
-            if hasattr(response, 'text'):
-                print(f"Response: {response.text}")
+            print(f"Помилка відправки: {e}")
             return False
     
     return True
