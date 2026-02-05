@@ -159,4 +159,16 @@ light-monitor-kyiv/
 └── README.md                   # цей файл
 ```
 
+
+---
+
+##### Корисне
+[Отримати номер групи для Києва із портала YASNO](https://sergeymaximenko.github.io/SetTimeGenerator/GetGroupForKiev.html))
+
+[Svitlobot Map](https://svitlobot.pp.ua/map.php)
+
+[Map - Svitlobot](https://svitlobot.obbdev.com/Map)
+
+---
+
 Дякую спільноті https://t.me/svitlobot_api за те, що нагадала: *хочеш, аби все добре працювало і було, як потрібно саме тобі, зроби все сам* ¯\\_(ツ)_/¯
