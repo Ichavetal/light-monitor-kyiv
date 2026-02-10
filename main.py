@@ -16,8 +16,15 @@ KYIV_TZ = timezone(timedelta(hours=2))
 GITHUB_URL = "https://raw.githubusercontent.com/Baskerville42/outage-data-ua/main/data/{region}.json"
 YASNO_URL = "https://app.yasno.ua/api/blackout-service/public/shutdowns/regions/{region_id}/dsos/{dso_id}/planned-outages"
 
-MAX_MESSAGES = 3
-DAYS_UA = {0: "Понеділок", 1: "Вівторок", 2: "Середа", 3: "Четвер", 4: "П'ятниця", 5: "Субота", 6: "Неділя"}
+DAYS_UA = {
+    0: "Понеділок",
+    1: "Вівторок",
+    2: "Середа",
+    3: "Четвер",
+    4: "П'ятниця",
+    5: "Субота",
+    6: "Неділя"
+}
 
 
 def load_config() -> dict:
@@ -43,7 +50,7 @@ def get_kyiv_now() -> datetime:
     return datetime.now(KYIV_TZ)
 
 
-def format_hours_full(hours: float) -> str:
+def format_hours_full(hours: float, cfg: dict) -> str:
     """Format hours with full Ukrainian declension"""
     if hours == int(hours):
         hours = int(hours)
@@ -57,11 +64,12 @@ def format_hours_full(hours: float) -> str:
     return f"{hours} годин"
 
 
-def format_hours_short(hours: float) -> str:
+def format_hours_short(hours: float, cfg: dict) -> str:
     """Format hours short (for table)"""
+    suffix = cfg['ui']['text'].get('hours_short', 'г')
     if hours == int(hours):
-        return f"{int(hours)}г"
-    return f"{hours}г"
+        return f"{int(hours)}{suffix}"
+    return f"{hours}{suffix}"
 
 
 def format_slot_time(slot: int) -> str:
@@ -73,7 +81,8 @@ def format_slot_time(slot: int) -> str:
 # === Data Fetching ===
 
 def fetch_github(cfg: dict) -> Optional[dict]:
-    if not cfg['sources']['github']['enabled']:
+    if not cfg['sources']['github'].get('enabled', False):
+        print("GitHub source disabled")
         return None
     try:
         url = GITHUB_URL.format(region=cfg['settings']['region'])
@@ -86,12 +95,14 @@ def fetch_github(cfg: dict) -> Optional[dict]:
 
 
 def fetch_yasno(cfg: dict) -> Optional[dict]:
-    if not cfg['sources']['yasno']['enabled']:
+    yasno_cfg = cfg['sources'].get('yasno', {})
+    if not yasno_cfg.get('enabled', False):
+        print("Yasno source disabled")
         return None
     try:
         url = YASNO_URL.format(
-            region_id=cfg['settings']['yasno_region_id'],
-            dso_id=cfg['settings']['yasno_dso_id']
+            region_id=yasno_cfg.get('region_id', '25'),
+            dso_id=yasno_cfg.get('dso_id', '902')
         )
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
         r.raise_for_status()
@@ -226,33 +237,29 @@ def render_table(periods: list[dict], cfg: dict) -> str:
     """Render aligned ASCII table"""
     icons = cfg['ui']['icons']
     txt = cfg['ui']['text']
+    fmt = cfg['ui']['format']
     
-    # Column widths (fixed for alignment)
-    COL1 = 13  # "Нема" column
-    COL2 = 13  # "Є" column
-    COL3 = 8   # "Час" column
+    # Column widths
+    COL1, COL2, COL3 = 13, 13, 8
+    total_width = COL1 + COL2 + COL3 + 4
     
-    total_width = COL1 + COL2 + COL3 + 4  # +4 for separators
+    sep_char = fmt.get('table_separator', '-')
+    sep_line = sep_char * total_width
     
-    # Build header
-    header1 = f"{txt['off']:^{COL1}}|{txt['on']:^{COL2}}|{txt['time_header']:^{COL3}}"
-    sep_line = "-" * total_width
+    header = f"{txt['off']:^{COL1}}|{txt['on']:^{COL2}}|{txt['time_header']:^{COL3}}"
     
-    lines = [sep_line, header1, sep_line]
+    lines = [sep_line, header, sep_line]
     
-    total_on = 0.0
-    total_off = 0.0
+    total_on, total_off = 0.0, 0.0
     
     for p in periods:
         time_range = f"{p['start']}-{p['end']}"
-        dur = format_hours_short(p['hours'])
+        dur = format_hours_short(p['hours'], cfg)
         
         if p['is_on']:
-            # Empty | Time | Duration
             row = f"{'':{COL1}}|{time_range:^{COL2}}|{dur:^{COL3}}"
             total_on += p['hours']
         else:
-            # Time | Empty | Duration
             row = f"{time_range:^{COL1}}|{'':{COL2}}|{dur:^{COL3}}"
             total_off += p['hours']
         
@@ -260,55 +267,59 @@ def render_table(periods: list[dict], cfg: dict) -> str:
     
     lines.append(sep_line)
     
-    # Summary outside table with icons
     summary = [
         "",
-        f"{icons['on']} {txt['on']}: {format_hours_full(total_on)}",
-        f"{icons['off']} {txt['off']}: {format_hours_full(total_off)}"
+        f"{icons['on']} {txt.get('on_full', txt['on'])}: {format_hours_full(total_on, cfg)}",
+        f"{icons['off']} {txt.get('off_full', txt['off'])}: {format_hours_full(total_off, cfg)}"
     ]
     
-    # Wrap table in <pre> for monospace
     table_text = "\n".join(lines)
     return f"<pre>{table_text}</pre>" + "\n".join(summary)
 
 
 def render_list(periods: list[dict], cfg: dict) -> str:
-    """Render simple list format"""
+    """Render list format"""
     icons = cfg['ui']['icons']
     txt = cfg['ui']['text']
     
+    # Use list-specific icons if available
+    icon_on = icons.get('on_list', icons['on'])
+    icon_off = icons.get('off_list', icons['off'])
+    
     lines = []
-    total_on = 0.0
-    total_off = 0.0
+    total_on, total_off = 0.0, 0.0
     
     for p in periods:
-        ico = icons['on'] if p['is_on'] else icons['off']
-        lines.append(f"{ico} {p['start']} - {p['end']} … ({format_hours_full(p['hours'])})")
+        ico = icon_on if p['is_on'] else icon_off
+        lines.append(f"{ico} {p['start']} - {p['end']} … ({format_hours_full(p['hours'], cfg)})")
         if p['is_on']:
             total_on += p['hours']
         else:
             total_off += p['hours']
     
     lines.append("")
-    lines.append(f"{icons['on']} {txt['on']}: {format_hours_full(total_on)}")
-    lines.append(f"{icons['off']} {txt['off']}: {format_hours_full(total_off)}")
+    lines.append(f"{icon_on} {txt.get('on_full', txt['on'])}: {format_hours_full(total_on, cfg)}")
+    lines.append(f"{icon_off} {txt.get('off_full', txt['off'])}: {format_hours_full(total_off, cfg)}")
     return "\n".join(lines)
 
 
 def format_day(data: dict, date: datetime, src: str, cfg: dict) -> str:
     """Format single day message"""
     ui = cfg['ui']
+    icons = ui['icons']
+    txt = ui['text']
+    
     d_str = date.strftime("%d.%m")
     day_name = DAYS_UA[date.weekday()]
     src_name = cfg['sources'].get(src, {}).get('name', src)
     
-    lines = [f"{ui['icons']['calendar']}  {d_str} ({day_name}) [{src_name}]:", ""]
+    lines = [f"{icons['calendar']}  {d_str} ({day_name}) [{src_name}]:", ""]
     
     st = data.get("status")
     if st == "emergency":
-        lines.append(ui['text']['emergency'])
+        lines.append(f"{icons['emergency']} {txt['emergency']}")
     elif st == "pending":
-        lines.append(ui['text']['pending'])
+        lines.append(f"{icons['pending']} {txt['pending']}")
     elif data.get("slots"):
         periods = slots_to_periods(data["slots"])
         if cfg['settings']['style'] == "table":
@@ -341,11 +352,14 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
         for d_str in sorted(dates)[:2]:
             g_d = gh.get(grp, {}).get(d_str)
             y_d = ya.get(grp, {}).get(d_str)
-            dt = (g_d or y_d)["date"]
             
+            if not g_d and not y_d:
+                continue
+            
+            dt = (g_d or y_d)["date"]
             src_msgs = []
             
-            # Check if both match
+            # Check if both sources match
             match = False
             if g_d and y_d:
                 if g_d['status'] == 'normal' and y_d['status'] == 'normal':
@@ -353,10 +367,10 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
                         match = True
             
             if match:
-                # Combined source name
-                names = f"{cfg['sources']['github']['name']}, {cfg['sources']['yasno']['name']}"
+                gh_name = cfg['sources']['github']['name']
+                ya_name = cfg['sources']['yasno']['name']
                 base = format_day(g_d, dt, "github", cfg)
-                base = base.replace(f"[{cfg['sources']['github']['name']}]", f"[{names}]")
+                base = base.replace(f"[{gh_name}]", f"[{gh_name}, {ya_name}]")
                 src_msgs.append(base)
             else:
                 if g_d:
@@ -374,8 +388,14 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
     if not blocks:
         return None
     
-    now = get_kyiv_now().strftime("%d.%m.%Y %H:%M")
-    footer = f"\n\n{cfg['ui']['icons']['clock']} {cfg['ui']['text']['updated']}: {now} (Київ)"
+    # Footer with update time
+    icons = cfg['ui']['icons']
+    txt = cfg['ui']['text']
+    sep = icons.get('separator', '⠅')
+    now = get_kyiv_now()
+    time_str = now.strftime(f"%d.%m.%Y {sep}%H:%M")
+    footer = f"\n\n{icons['clock']} {txt['updated']}: {time_str} (Київ)"
+    
     return "\n\n\n".join(blocks) + footer
 
 
@@ -383,6 +403,7 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
 
 def send_tg(text: str) -> Optional[int]:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHANNEL_ID:
+        print("Telegram credentials not configured")
         return None
     try:
         r = requests.post(
@@ -397,7 +418,9 @@ def send_tg(text: str) -> Optional[int]:
         return None
 
 
-def manage_msgs(mid: int):
+def manage_msgs(mid: int, cfg: dict):
+    max_msgs = cfg['settings'].get('max_messages', 3)
+    
     try:
         with open(MESSAGES_FILE, "r") as f:
             ids = json.load(f)
@@ -413,7 +436,7 @@ def manage_msgs(mid: int):
     ids.append(mid)
     
     # Delete old messages
-    while len(ids) > MAX_MESSAGES:
+    while len(ids) > max_msgs:
         old = ids.pop(0)
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage",
@@ -429,8 +452,11 @@ def manage_msgs(mid: int):
 def main():
     cfg = load_config()
     
+    print(f"Region: {cfg['settings']['region']}")
+    print(f"Groups: {cfg['settings']['groups']}")
     print(f"Style: {cfg['settings']['style']}")
-    print(f"Sources: github={cfg['sources']['github']['enabled']}, yasno={cfg['sources']['yasno']['enabled']}")
+    print(f"GitHub: {cfg['sources']['github'].get('enabled', False)}")
+    print(f"Yasno: {cfg['sources']['yasno'].get('enabled', False)}")
     
     print("\nFetching data...")
     gh_data = fetch_github(cfg)
@@ -446,7 +472,7 @@ def main():
     gh_sched = extract_github(gh_data, cfg)
     ya_sched = extract_yasno(ya_data, cfg)
     
-    # Serialize for cache comparison
+    # Serialize for cache
     def serialize(s):
         r = {}
         for g, d in s.items():
@@ -470,7 +496,7 @@ def main():
         
         mid = send_tg(msg)
         if mid:
-            manage_msgs(mid)
+            manage_msgs(mid, cfg)
             save_cache(new_c)
             print("Done.")
         else:
