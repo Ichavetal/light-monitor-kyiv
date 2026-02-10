@@ -184,9 +184,9 @@
     },
     "format": {
       "header_template": "========== ◉ {group} ◉ ==========",
-      "separator_source": "\n✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧",  		// Між джерелами
-      "separator_day": "\n\n■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■",          // Між днями
-      "table_separator": "-"                      						        // Символ лінії таблиці
+      "separator_source": "\n✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧ ✧",  	// Між джерелами
+      "separator_day": "\n\n■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■",         // Між днями
+      "table_separator": "-"                      						    // Символ лінії таблиці
     }
   }
 }
