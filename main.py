@@ -65,11 +65,19 @@ def format_hours_full(hours: float) -> str:
 
 
 def format_hours_short(hours: float, cfg: dict) -> str:
-    """Format hours short (for table)"""
+    """Format hours short (for table), plain text"""
     suffix = cfg['ui']['text'].get('hours_short', 'год.')
     if hours == int(hours):
         return f"{int(hours)} {suffix}"
     return f"{hours} {suffix}"
+
+
+def format_hours_short_bold(hours: float, cfg: dict) -> str:
+    """Format hours short with bold number (for detail intervals)"""
+    suffix = cfg['ui']['text'].get('hours_short', 'год.')
+    if hours == int(hours):
+        return f"<b>{int(hours)}</b> {suffix}"
+    return f"<b>{hours}</b> {suffix}"
 
 
 def format_slot_time(slot: int) -> str:
@@ -246,7 +254,7 @@ def save_cache(cache: dict):
 # === Formatting ===
 
 def render_intervals_detail(periods: list[dict], is_on: bool, cfg: dict) -> str:
-    """Render detailed intervals with monospace formatting"""
+    """Render detailed intervals with monospace time and bold hours"""
     icons = cfg['ui']['icons']
     txt = cfg['ui']['text']
     indent = get_detail_indent(cfg)
@@ -269,8 +277,8 @@ def render_intervals_detail(periods: list[dict], is_on: bool, cfg: dict) -> str:
     
     for p in filtered:
         time_range = f"{p['start']}-{p['end']}"
-        dur = format_hours_short(p['hours'], cfg)
-        # Wrap in <code> for monospace
+        dur = format_hours_short_bold(p['hours'], cfg)
+        # <code> for monospace time, <b> for bold hours in dur
         lines.append(f"{indent}<code>{time_range}</code>  |  {dur}")
     
     return "\n".join(lines)
@@ -288,8 +296,8 @@ def render_summary_simple(periods: list[dict], cfg: dict) -> str:
     icon_off = icons.get('off_list', icons['off'])
     
     lines = [
-        f"{icon_on} {txt.get('on_full')}: {format_hours_full(total_on)}",
-        f"{icon_off} {txt.get('off_full')}: {format_hours_full(total_off)}"
+        f"{icon_on} {txt.get('on_full', 'Світло є')}: {format_hours_full(total_on)}",
+        f"{icon_off} {txt.get('off_full', 'Світла нема')}: {format_hours_full(total_off)}"
     ]
     return "\n".join(lines)
 
@@ -317,10 +325,9 @@ def render_summary(periods: list[dict], cfg: dict) -> str:
 
 
 def render_table(periods: list[dict], cfg: dict) -> str:
-    """Render table with configurable format"""
+    """Render table wrapped in <pre>"""
     icons = cfg['ui']['icons']
     fmt = cfg['ui']['format']
-    table_format = cfg['settings'].get('table_format', 'pre')
     
     COL1, COL2, COL3 = 12, 12, 10
     total_width = COL1 + COL2 + COL3 + 2
@@ -345,17 +352,12 @@ def render_table(periods: list[dict], cfg: dict) -> str:
     
     lines.append(sep_line)
     
-    # Choose format based on config
-    if table_format == 'code_lines':
-        # Each line wrapped in <code>
-        table_text = "\n".join([f"<code>{line}</code>" for line in lines])
-    else:
-        # Traditional <pre> block
-        table_text = f"<pre>{chr(10).join(lines)}</pre>"
+    # Wrap entire table in <pre>
+    table_text = "\n".join(lines)
     
     summary = render_summary(periods, cfg)
     
-    return f"{table_text}{summary}"
+    return f"<pre>{table_text}</pre>{summary}"
 
 
 def render_list(periods: list[dict], cfg: dict) -> str:
@@ -547,7 +549,6 @@ def main():
     print(f"Region: {cfg['settings']['region']}")
     print(f"Groups: {cfg['settings']['groups']}")
     print(f"Style: {cfg['settings']['style']}")
-    print(f"Table format: {cfg['settings'].get('table_format', 'pre')}")
     print(f"Detail intervals: {cfg['settings'].get('show_intervals_detail', False)}")
     print(f"GitHub: {cfg['sources']['github'].get('enabled', False)}")
     print(f"Yasno: {cfg['sources']['yasno'].get('enabled', False)}")
