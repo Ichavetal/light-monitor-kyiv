@@ -78,10 +78,10 @@ def format_slot_time(slot: int) -> str:
     return "24:00" if h == 24 else f"{h:02d}:{m:02d}"
 
 
-def get_spacing(cfg: dict, space_type: str) -> str:
+def get_spacing(cfg: dict, space_type: str, default: int = 1) -> str:
     """Get spacing string based on config"""
     spacing = cfg['ui'].get('spacing', {})
-    count = spacing.get(space_type, 1)
+    count = spacing.get(space_type, default)
     return "\n" * count
 
 
@@ -245,16 +245,13 @@ def render_intervals_detail(periods: list[dict], is_on: bool, cfg: dict) -> str:
     icons = cfg['ui']['icons']
     txt = cfg['ui']['text']
     
-    # Filter periods
     filtered = [p for p in periods if p['is_on'] == is_on]
     
     if not filtered:
         return ""
     
-    # Calculate total
     total = sum(p['hours'] for p in filtered)
     
-    # Choose icon and text
     if is_on:
         icon = icons.get('light_on', '💡')
         label = txt.get('on_detail', 'Світло буде')
@@ -264,7 +261,6 @@ def render_intervals_detail(periods: list[dict], is_on: bool, cfg: dict) -> str:
     
     lines = [f"{icon} {label} {format_hours_full(total)}:"]
     
-    # Add each interval
     for p in filtered:
         time_range = f"{p['start']}-{p['end']}"
         dur = format_hours_short(p['hours'], cfg)
@@ -274,7 +270,7 @@ def render_intervals_detail(periods: list[dict], is_on: bool, cfg: dict) -> str:
 
 
 def render_summary_simple(periods: list[dict], cfg: dict) -> str:
-    """Render simple summary (old style)"""
+    """Render simple summary"""
     icons = cfg['ui']['icons']
     txt = cfg['ui']['text']
     
@@ -292,8 +288,9 @@ def render_summary_simple(periods: list[dict], cfg: dict) -> str:
 
 
 def render_summary(periods: list[dict], cfg: dict) -> str:
-    """Render summary - either detailed or simple based on config"""
+    """Render summary with spacing"""
     show_detail = cfg['settings'].get('show_intervals_detail', False)
+    spacing = get_spacing(cfg, 'before_summary', 1)
     
     if show_detail:
         on_detail = render_intervals_detail(periods, True, cfg)
@@ -305,9 +302,11 @@ def render_summary(periods: list[dict], cfg: dict) -> str:
         if off_detail:
             parts.append(off_detail)
         
-        return "\n\n".join(parts)
+        content = "\n\n".join(parts)
     else:
-        return render_summary_simple(periods, cfg)
+        content = render_summary_simple(periods, cfg)
+    
+    return f"{spacing}{content}"
 
 
 def render_table(periods: list[dict], cfg: dict) -> str:
@@ -315,15 +314,12 @@ def render_table(periods: list[dict], cfg: dict) -> str:
     icons = cfg['ui']['icons']
     fmt = cfg['ui']['format']
     
-    # Column widths (adjusted for alignment)
     COL1, COL2, COL3 = 12, 12, 10
-    total_width = COL1 + COL2 + COL3 + 2  # +2 for separators |
+    total_width = COL1 + COL2 + COL3 + 2
     
     sep_char = fmt.get('table_separator', '-')
     sep_line = sep_char * total_width
     
-    # Icon-only header with proper centering
-    # Note: emojis have variable width, so we adjust padding
     header = f"    {icons['off']}     |    {icons['on']}     |   {icons['clock']}"
     
     lines = [sep_line, header, sep_line]
@@ -341,13 +337,10 @@ def render_table(periods: list[dict], cfg: dict) -> str:
     
     lines.append(sep_line)
     
-    # Wrap table in <pre> for monospace
     table_text = "\n".join(lines)
-    
-    # Add summary
     summary = render_summary(periods, cfg)
     
-    return f"<pre>{table_text}</pre>\n{summary}"
+    return f"<pre>{table_text}</pre>{summary}"
 
 
 def render_list(periods: list[dict], cfg: dict) -> str:
@@ -363,10 +356,10 @@ def render_list(periods: list[dict], cfg: dict) -> str:
         ico = icon_on if p['is_on'] else icon_off
         lines.append(f"{ico} {p['start']} - {p['end']} … ({format_hours_full(p['hours'])})")
     
-    lines.append("")
-    lines.append(render_summary(periods, cfg))
+    content = "\n".join(lines)
+    summary = render_summary(periods, cfg)
     
-    return "\n".join(lines)
+    return f"{content}{summary}"
 
 
 def format_day(data: dict, date: datetime, src: str, cfg: dict) -> str:
@@ -396,18 +389,37 @@ def format_day(data: dict, date: datetime, src: str, cfg: dict) -> str:
     return "\n".join(lines)
 
 
+def format_footer(cfg: dict) -> str:
+    """Format footer with separator and update time"""
+    icons = cfg['ui']['icons']
+    txt = cfg['ui']['text']
+    fmt = cfg['ui']['format']
+    
+    # Get separator
+    footer_sep = fmt.get('separator_footer', '────────────────────')
+    
+    # Get spacing
+    space_before = get_spacing(cfg, 'before_footer', 2)
+    space_after_sep = get_spacing(cfg, 'after_footer_separator', 1)
+    
+    # Format time
+    sep = icons.get('separator', '⠅')
+    now = get_kyiv_now()
+    time_str = now.strftime(f"%d.%m.%Y {sep}%H:%M")
+    
+    return f"{space_before}{footer_sep}{space_after_sep}{icons['clock']} {txt['updated']}: {time_str} (Київ)"
+
+
 def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
     """Format complete message"""
     groups = cfg['settings']['groups']
     fmt = cfg['ui']['format']
     
-    # Get separators
     sep_source = fmt['separator_source']
     sep_day = fmt['separator_day']
     
-    # Get spacing
-    space_source = get_spacing(cfg, 'before_separator_source')
-    space_day = get_spacing(cfg, 'before_separator_day')
+    space_source = get_spacing(cfg, 'before_separator_source', 1)
+    space_day = get_spacing(cfg, 'before_separator_day', 2)
     
     blocks = []
     
@@ -435,7 +447,6 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
             dt = (g_d or y_d)["date"]
             src_msgs = []
             
-            # Check if both sources match
             match = False
             if g_d and y_d:
                 if g_d['status'] == 'normal' and y_d['status'] == 'normal':
@@ -455,12 +466,10 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
                     src_msgs.append(format_day(y_d, dt, "yasno", cfg))
             
             if src_msgs:
-                # Join sources with spacing
                 source_separator = f"{space_source}{sep_source}\n"
                 day_msgs.append(source_separator.join(src_msgs))
         
         if day_msgs:
-            # Join days with spacing
             day_separator = f"{space_day}{sep_day}\n"
             body = day_separator.join(day_msgs)
             blocks.append(f"{header}\n{body}")
@@ -468,13 +477,7 @@ def format_msg(gh: dict, ya: dict, cfg: dict) -> Optional[str]:
     if not blocks:
         return None
     
-    # Footer with update time
-    icons = cfg['ui']['icons']
-    txt = cfg['ui']['text']
-    sep = icons.get('separator', '⠅')
-    now = get_kyiv_now()
-    time_str = now.strftime(f"%d.%m.%Y {sep}%H:%M")
-    footer = f"\n\n{icons['clock']} {txt['updated']}: {time_str} (Київ)"
+    footer = format_footer(cfg)
     
     return "\n\n\n".join(blocks) + footer
 
@@ -507,7 +510,6 @@ def manage_msgs(mid: int, cfg: dict):
     except:
         ids = []
     
-    # Pin new message
     requests.post(
         f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/pinChatMessage",
         json={"chat_id": TELEGRAM_CHANNEL_ID, "message_id": mid, "disable_notification": True}
@@ -515,7 +517,6 @@ def manage_msgs(mid: int, cfg: dict):
     
     ids.append(mid)
     
-    # Delete old messages
     while len(ids) > max_msgs:
         old = ids.pop(0)
         requests.post(
@@ -553,7 +554,6 @@ def main():
     gh_sched = extract_github(gh_data, cfg)
     ya_sched = extract_yasno(ya_data, cfg)
     
-    # Serialize for cache
     def serialize(s):
         r = {}
         for g, d in s.items():
