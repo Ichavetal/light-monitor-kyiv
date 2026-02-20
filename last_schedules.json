@@ -53,6 +53,10 @@
           true,
           true
         ]
+      },
+      "2026-02-21": {
+        "status": "pending",
+        "slots": null
       }
     }
   },
