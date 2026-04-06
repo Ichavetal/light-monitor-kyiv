@@ -14,11 +14,11 @@
   "yasno": {
     "GPV4.1": {
       "2026-04-06": {
-        "status": "pending",
+        "status": "emergency",
         "slots": null
       },
       "2026-04-07": {
-        "status": "pending",
+        "status": "emergency",
         "slots": null
       }
     }
