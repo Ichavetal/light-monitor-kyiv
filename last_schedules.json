@@ -1,10 +1,6 @@
 {
   "github": {
     "GPV4.1": {
-      "2026-04-14": {
-        "status": "pending",
-        "slots": null
-      },
       "2026-04-15": {
         "status": "pending",
         "slots": null
@@ -13,11 +9,11 @@
   },
   "yasno": {
     "GPV4.1": {
-      "2026-04-15": {
+      "2026-04-16": {
         "status": "pending",
         "slots": null
       },
-      "2026-04-16": {
+      "2026-04-17": {
         "status": "pending",
         "slots": null
       }
