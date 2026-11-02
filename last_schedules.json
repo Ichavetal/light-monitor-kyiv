@@ -1,20 +1,9 @@
 {
   "github": {
     "GPV4.1": {
-      "2026-11-02": {
+      "2026-11-03": {
         "status": "normal",
         "slots": [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           true,
           true,
           true,
@@ -24,10 +13,9 @@
           true,
           true,
           true,
-          false,
-          false,
-          false,
-          false,
+          true,
+          true,
+          true,
           false,
           false,
           false,
@@ -51,27 +39,28 @@
           false,
           false,
           false,
-          false
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          true,
+          true
         ]
       }
     }
   },
   "yasno": {
     "GPV4.1": {
-      "2026-11-02": {
+      "2026-11-03": {
         "status": "normal",
         "slots": [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           true,
           true,
           true,
@@ -81,10 +70,9 @@
           true,
           true,
           true,
-          false,
-          false,
-          false,
-          false,
+          true,
+          true,
+          true,
           false,
           false,
           false,
@@ -108,10 +96,22 @@
           false,
           false,
           false,
-          false
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          true,
+          true
         ]
       },
-      "2026-11-03": {
+      "2026-11-04": {
         "status": "pending",
         "slots": null
       }
